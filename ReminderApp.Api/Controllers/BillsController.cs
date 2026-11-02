@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using ReminderApp.Api.Data;
 using ReminderApp.Api.DTOs;
 using ReminderApp.Api.Models;
@@ -16,11 +17,16 @@ public class BillsController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IFileStorageService _fileStorage;
+    private readonly IDistributedCache _cache;
 
-    public BillsController(AppDbContext context, IFileStorageService fileStorage)
+    public BillsController(
+        AppDbContext context,
+        IFileStorageService fileStorage,
+        IDistributedCache cache)
     {
         _context = context;
         _fileStorage = fileStorage;
+        _cache = cache;
     }
 
     private Guid GetCurrentUserId() =>
@@ -59,6 +65,9 @@ public class BillsController : ControllerBase
         _context.Bills.Add(bill);
         await _context.SaveChangesAsync();
 
+        // Invalidate Redis cache so search picks up the new bill
+        await _cache.RemoveAsync($"search:{userId}");
+
         return CreatedAtAction(nameof(GetUserBills), new { id = bill.Id },
             new BillResponse(bill.Id, bill.Title, bill.Category.ToString(), bill.Amount, bill.DueDate, bill.BillReceiptUrl, bill.Status.ToString(), bill.ReminderSent));
     }
@@ -88,5 +97,31 @@ public class BillsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Bill marked as paid." });
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteBill(Guid id)
+    {
+        var userId = GetCurrentUserId();
+
+        var bill = await _context.Bills
+            .FirstOrDefaultAsync(b => b.Id == id && b.UserId == userId);
+
+        if (bill == null) return NotFound(new { message = "Bill not found." });
+
+        // 1. Delete physical receipt file from disk if present
+        if (!string.IsNullOrEmpty(bill.BillReceiptUrl))
+        {
+            _fileStorage.DeleteFileAsync(bill.BillReceiptUrl);
+        }
+
+        // 2. Remove entity from PostgreSQL
+        _context.Bills.Remove(bill);
+        await _context.SaveChangesAsync();
+
+        // 3. Invalidate Redis search cache
+        await _cache.RemoveAsync($"search:{userId}");
+
+        return NoContent(); // 204 No Content
     }
 }

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using ReminderApp.Api.Data;
 using ReminderApp.Api.DTOs;
 using ReminderApp.Api.Models;
@@ -16,11 +17,16 @@ public class WarrantiesController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IFileStorageService _fileStorage;
+    private readonly IDistributedCache _cache;
 
-    public WarrantiesController(AppDbContext context, IFileStorageService fileStorage)
+    public WarrantiesController(
+        AppDbContext context,
+        IFileStorageService fileStorage,
+        IDistributedCache cache)
     {
         _context = context;
         _fileStorage = fileStorage;
+        _cache = cache;
     }
 
     private Guid GetCurrentUserId() =>
@@ -42,7 +48,7 @@ public class WarrantiesController : ControllerBase
                 w.InvoicePhotoUrl,
                 w.ItemPhotoUrl,
                 w.Notes,
-                w.ReminderSent // <-- 9th argument added here
+                w.ReminderSent
             ))
             .ToListAsync();
 
@@ -62,11 +68,14 @@ public class WarrantiesController : ControllerBase
             PurchaseDate = request.PurchaseDate,
             ExpiryDate = request.ExpiryDate,
             Notes = request.Notes,
-            ReminderSent = false // Set default if not automatically set by the entity
+            ReminderSent = false
         };
 
         _context.Warranties.Add(warranty);
         await _context.SaveChangesAsync();
+
+        // Invalidate Redis search cache
+        await _cache.RemoveAsync($"search:{userId}");
 
         return Ok(new WarrantyResponse(
             warranty.Id,
@@ -77,14 +86,15 @@ public class WarrantiesController : ControllerBase
             warranty.InvoicePhotoUrl,
             warranty.ItemPhotoUrl,
             warranty.Notes,
-            warranty.ReminderSent // <-- 9th argument added here
+            warranty.ReminderSent
         ));
     }
+
     [HttpPost("{id:guid}/upload-photos")]
     public async Task<IActionResult> UploadPhotos(
-    Guid id,
-    [FromForm] IFormFile? invoicePhoto,
-    [FromForm] IFormFile? itemPhoto)
+        Guid id,
+        [FromForm] IFormFile? invoicePhoto,
+        [FromForm] IFormFile? itemPhoto)
     {
         var userId = GetCurrentUserId();
         var warranty = await _context.Warranties.FirstOrDefaultAsync(w => w.Id == id && w.UserId == userId);
@@ -112,5 +122,36 @@ public class WarrantiesController : ControllerBase
             invoiceUrl = warranty.InvoicePhotoUrl,
             itemUrl = warranty.ItemPhotoUrl
         });
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteWarranty(Guid id)
+    {
+        var userId = GetCurrentUserId();
+
+        var warranty = await _context.Warranties
+            .FirstOrDefaultAsync(w => w.Id == id && w.UserId == userId);
+
+        if (warranty == null) return NotFound(new { message = "Warranty not found" });
+
+        // 1. Delete physical files from disk
+        if (!string.IsNullOrEmpty(warranty.InvoicePhotoUrl))
+        {
+            _fileStorage.DeleteFileAsync(warranty.InvoicePhotoUrl);
+        }
+
+        if (!string.IsNullOrEmpty(warranty.ItemPhotoUrl))
+        {
+            _fileStorage.DeleteFileAsync(warranty.ItemPhotoUrl);
+        }
+
+        // 2. Remove entity from PostgreSQL
+        _context.Warranties.Remove(warranty);
+        await _context.SaveChangesAsync();
+
+        // 3. Clear Redis search cache for this user
+        await _cache.RemoveAsync($"search:{userId}");
+
+        return NoContent(); // 204 No Content
     }
 }

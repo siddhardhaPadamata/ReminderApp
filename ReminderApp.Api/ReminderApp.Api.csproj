@@ -23,4 +23,9 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\uploads\bills\" />
+    <Folder Include="wwwroot\uploads\warranties\" />
+  </ItemGroup>
+
 </Project>

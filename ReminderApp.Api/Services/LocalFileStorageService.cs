@@ -31,17 +31,28 @@ public class LocalFileStorageService : IFileStorageService
 
         return $"/uploads/{subFolder}/{uniqueFileName}";
     }
-
-    public Task DeleteFileAsync(string relativePath)
+    public bool DeleteFileAsync(string? relativeUrl)
     {
-        if (string.IsNullOrWhiteSpace(relativePath)) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(relativeUrl)) return false;
 
-        var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
-        var fullPath = Path.Combine(webRoot, relativePath.TrimStart('/'));
+        try
+        {
+            // Normalize path: trims leading slashes and combines with WebRootPath
+            var trimmedPath = relativeUrl.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar);
+            var absolutePath = Path.Combine(_env.WebRootPath, trimmedPath);
 
-        if (File.Exists(fullPath))
-            File.Delete(fullPath);
+            if (File.Exists(absolutePath))
+            {
+                File.Delete(absolutePath);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log warning or exception if required
+            Console.WriteLine($"Error deleting file {relativeUrl}: {ex.Message}");
+        }
 
-        return Task.CompletedTask;
+        return false;
     }
 }

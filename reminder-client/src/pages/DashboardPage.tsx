@@ -15,6 +15,7 @@ import {
     Plus,
     Tag,
     Loader2,
+    Trash2,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -87,6 +88,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             );
         } catch (err) {
             console.error('Failed to mark bill as paid:', err);
+        }
+    };
+
+    const handleDeleteBill = async (billId: string) => {
+        if (!window.confirm('Are you sure you want to delete this bill?')) return;
+        try {
+            await reminderApi.deleteBill(billId);
+            setBills((prev) => prev.filter((b) => b.id !== billId));
+        } catch (err) {
+            console.error('Failed to delete bill:', err);
+            alert('Could not delete bill. Please try again.');
+        }
+    };
+
+    const handleDeleteWarranty = async (warrantyId: string) => {
+        if (!window.confirm('Are you sure you want to delete this warranty?')) return;
+        try {
+            await reminderApi.deleteWarranty(warrantyId);
+            setWarranties((prev) => prev.filter((w) => w.id !== warrantyId));
+        } catch (err) {
+            console.error('Failed to delete warranty:', err);
+            alert('Could not delete warranty. Please try again.');
         }
     };
 
@@ -335,8 +358,16 @@ className = "px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs 
     Mark Paid
         </button>
                         )}
-</div>
-    </div>
+{/* Trash Delete Action */ }
+<button
+                          onClick={ () => handleDeleteBill(bill.id) }
+className = "p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+title = "Delete Bill"
+    >
+    <Trash2 className="w-4 h-4" />
+        </button>
+        </div>
+        </div>
                   ))}
 </div>
               )}
@@ -380,9 +411,8 @@ className = "text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-poin
             </p>
             < div className = "flex items-center gap-3 text-xs text-slate-500" >
             <span className="flex items-center gap-1" >
-            <Calendar className="w-3.5 h-3.5" /> Expires: { ' '}
-                            { w.expiryDate }
-                </span>
+            <Calendar className="w-3.5 h-3.5" /> Expires: { w.expiryDate }
+            </span>
                           {
                     w.category && (
                         <>
@@ -434,8 +464,16 @@ className = "text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-poin
             </button>
                         )
 }
-</div>
-    </div>
+{/* Trash Delete Action */ }
+<button
+                          onClick={ () => handleDeleteWarranty(w.id) }
+className = "p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+title = "Delete Warranty"
+    >
+    <Trash2 className="w-4 h-4" />
+        </button>
+        </div>
+        </div>
                   ))}
 </div>
               )}

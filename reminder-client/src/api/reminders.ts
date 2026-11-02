@@ -73,4 +73,11 @@ export const reminderApi = {
         });
         return res.data;
     },
+    deleteBill: async (id: string): Promise<void> => {
+        await apiClient.delete(`/bills/${id}`);
+    },
+
+    deleteWarranty: async (id: string): Promise<void> => {
+        await apiClient.delete(`/warranties/${id}`);
+    },
 };

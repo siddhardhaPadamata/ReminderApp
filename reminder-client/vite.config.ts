@@ -13,13 +13,13 @@ export default defineConfig({
         proxy: {
             // Forwards all /api/* requests to ASP.NET Core
             '/api': {
-                target: 'https://localhost:44399',
+                target: 'https://localhost:7184',
                 changeOrigin: true,
                 secure: false, // Allows self-signed localhost SSL certs
             },
             // Forwards /uploads/* requests so receipts load seamlessly
             '/uploads': {
-                target: 'https://localhost:44399',
+                target: 'https://localhost:7184',
                 changeOrigin: true,
                 secure: false,
             },
