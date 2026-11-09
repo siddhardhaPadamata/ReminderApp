@@ -1,8 +1,10 @@
-import axios from 'axios';
+import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
 
-//const BASE_URL = 'https://localhost:44399/api';
-// Point to the Dockerized API endpoint
-//const BASE_URL = 'http://localhost:5000/api';
+// Extend config interface to track retry state
+interface CustomAxiosRequestConfig extends AxiosRequestConfig {
+    _retry?: boolean;
+}
+
 export const apiClient = axios.create({
     baseURL: '/api',
     headers: {
@@ -10,46 +12,69 @@ export const apiClient = axios.create({
     },
 });
 
+// 1. Request Interceptor: Attach JWT Bearer token
 apiClient.interceptors.request.use(
-    (config) => {
+    (config: any) => {
         const token = localStorage.getItem('accessToken');
-        if (token) {
+        if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
-    (error) => Promise.reject(error)
+    (error: AxiosError) => Promise.reject(error)
 );
 
+// 2. Response Interceptor: Auto-refresh or auto-logout on 401 Unauthorized
 apiClient.interceptors.response.use(
     (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
+    async (error: AxiosError) => {
+        const originalRequest = error.config as CustomAxiosRequestConfig;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+            if (
+                originalRequest.url?.includes('/auth/login') ||
+                originalRequest.url?.includes('/auth/register')
+            ) {
+                return Promise.reject(error);
+            }
+
             originalRequest._retry = true;
             const refreshToken = localStorage.getItem('refreshToken');
             const userId = localStorage.getItem('userId');
 
             if (refreshToken && userId) {
                 try {
-                    const res = await axios.post(`${BASE_URL}/auth/refresh`, {
+                    const res = await axios.post('/api/auth/refresh', {
                         userId,
                         refreshToken,
                     });
 
                     const { accessToken, refreshToken: newRefreshToken } = res.data;
-                    localStorage.setItem('accessToken', accessToken);
-                    localStorage.setItem('refreshToken', newRefreshToken);
 
-                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    localStorage.setItem('accessToken', accessToken);
+                    if (newRefreshToken) {
+                        localStorage.setItem('refreshToken', newRefreshToken);
+                    }
+
+                    if (originalRequest.headers) {
+                        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    }
+
                     return apiClient(originalRequest);
-                } catch {
+                } catch (refreshErr) {
+                    console.error('Session expired. Logging out...', refreshErr);
                     localStorage.clear();
-                    window.location.href = '/login';
+                    window.location.href = '/';
+                    return Promise.reject(refreshErr);
                 }
+            } else {
+                localStorage.clear();
+                window.location.href = '/';
             }
         }
+
         return Promise.reject(error);
     }
 );
+
+export default apiClient;

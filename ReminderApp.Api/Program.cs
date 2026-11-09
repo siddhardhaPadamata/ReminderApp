@@ -21,7 +21,7 @@ builder.Services.AddStackExchangeRedisCache(options =>
 // DI Services
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
-builder.Services.AddSingleton<INotificationSender, ConsoleNotificationSender>();
+builder.Services.AddScoped<INotificationService, NotificationService>(); 
 builder.Services.AddHostedService<ReminderBackgroundService>();
 // JWT Authentication Configuration
 var jwtKey = builder.Configuration["Jwt:Key"]!;

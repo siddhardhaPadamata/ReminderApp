@@ -85,7 +85,6 @@ public class BillsController : ControllerBase
 
         return Ok(new { receiptUrl = filePath });
     }
-
     [HttpPatch("{id:guid}/mark-paid")]
     public async Task<IActionResult> MarkAsPaid(Guid id)
     {
@@ -124,4 +123,5 @@ public class BillsController : ControllerBase
 
         return NoContent(); // 204 No Content
     }
+
 }

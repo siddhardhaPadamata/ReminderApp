@@ -1,23 +1,19 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ReminderApp.Api.Data;
-using ReminderApp.Api.Models;
 using ReminderApp.Api.Services;
 
 namespace ReminderApp.Api.BackgroundJobs;
 
 public class ReminderBackgroundService : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<ReminderBackgroundService> _logger;
 
-    // Run interval: once every 24 hours (or adjust to shorter duration for testing)
-    private readonly TimeSpan _checkInterval = TimeSpan.FromHours(24);
-
     public ReminderBackgroundService(
-        IServiceScopeFactory scopeFactory,
+        IServiceProvider serviceProvider,
         ILogger<ReminderBackgroundService> logger)
     {
-        _scopeFactory = scopeFactory;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
@@ -29,78 +25,81 @@ public class ReminderBackgroundService : BackgroundService
         {
             try
             {
-                await ProcessRemindersAsync(stoppingToken);
+                await ProcessDueRemindersAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An error occurred while executing daily reminders.");
+                _logger.LogError(ex, "Error occurred processing reminder background jobs.");
             }
 
-            // Wait for the next 24-hour cycle or until shutdown
-            await Task.Delay(_checkInterval, stoppingToken);
+            // Run once per day (or adjust to an hourly check)
+            await Task.Delay(TimeSpan.FromHours(24), stoppingToken);
         }
     }
 
-    private async Task ProcessRemindersAsync(CancellationToken cancellationToken)
+    private async Task ProcessDueRemindersAsync()
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var notifier = scope.ServiceProvider.GetRequiredService<INotificationSender>();
+        var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var tomorrow = today.AddDays(1);
-        var thirtyDaysLater = today.AddDays(30);
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var thirtyDaysLater = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30));
 
-        _logger.LogInformation("Scanning for reminders. Today: {Today}", today);
-
-        // 1. Process Bills due in 1 day (Tomorrow)
-        var upcomingBills = await context.Bills
+        // 1. Process Pending Bills Due Tomorrow
+        var dueBills = await context.Bills
             .Include(b => b.User)
-            .Where(b => b.DueDate == tomorrow
-                     && b.Status == BillStatus.Pending
-                     && !b.ReminderSent)
-            .ToListAsync(cancellationToken);
+            .Where(b => b.DueDate == tomorrow && (int)b.Status == 0 && !b.ReminderSent)
+            .ToListAsync();
 
-        foreach (var bill in upcomingBills)
+        foreach (var bill in dueBills)
         {
-            await notifier.SendBillReminderAsync(
-                bill.User?.Email,
-                bill.User?.PhoneNumber,
-                bill.Title,
-                bill.Amount,
-                bill.DueDate);
+            var subject = $"Payment Reminder: {bill.Title} is due tomorrow";
+            var text = $"Hello, your bill '{bill.Title}' for ₹{bill.Amount:F2} is due on {bill.DueDate}. Please pay before the due date.";
+            var html = $"<h3>Bill Reminder</h3><p>Your bill <strong>{bill.Title}</strong> for <strong>₹{bill.Amount:F2}</strong> is due tomorrow (<strong>{bill.DueDate}</strong>).</p>";
+
+            if (!string.IsNullOrEmpty(bill.User?.Email))
+            {
+                await notifications.SendEmailAsync(bill.User.Email, subject, text, html);
+            }
+
+            if (!string.IsNullOrEmpty(bill.User?.PhoneNumber))
+            {
+                await notifications.SendSmsAsync(bill.User.PhoneNumber, text);
+            }
 
             bill.ReminderSent = true;
         }
 
-        // 2. Process Warranties expiring in 30 days
+        // 2. Process Warranties Expiring in 30 Days
         var expiringWarranties = await context.Warranties
             .Include(w => w.User)
-            .Where(w => w.ExpiryDate == thirtyDaysLater
-                     && !w.ReminderSent)
-            .ToListAsync(cancellationToken);
+            .Where(w => w.ExpiryDate == thirtyDaysLater && !w.ReminderSent)
+            .ToListAsync();
 
         foreach (var warranty in expiringWarranties)
         {
-            await notifier.SendWarrantyReminderAsync(
-                warranty.User?.Email,
-                warranty.User?.PhoneNumber,
-                warranty.ItemName,
-                warranty.ExpiryDate);
+            var subject = $"Warranty Alert: {warranty.ItemName} expires in 30 days";
+            var text = $"Hello, the warranty for '{warranty.ItemName}' expires on {warranty.ExpiryDate}. Make sure to inspect the product or service it if needed.";
+            var html = $"<h3>Warranty Expiry Notice</h3><p>Your product <strong>{warranty.ItemName}</strong> has an active warranty expiring on <strong>{warranty.ExpiryDate}</strong>.</p>";
+
+            if (!string.IsNullOrEmpty(warranty.User?.Email))
+            {
+                await notifications.SendEmailAsync(warranty.User.Email, subject, text, html);
+            }
+
+            if (!string.IsNullOrEmpty(warranty.User?.PhoneNumber))
+            {
+                await notifications.SendSmsAsync(warranty.User.PhoneNumber, text);
+            }
 
             warranty.ReminderSent = true;
         }
 
-        if (upcomingBills.Any() || expiringWarranties.Any())
+        if (dueBills.Any() || expiringWarranties.Any())
         {
-            await context.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation(
-                "Reminders dispatched: {BillCount} bills, {WarrantyCount} warranties.",
-                upcomingBills.Count, expiringWarranties.Count);
-        }
-        else
-        {
-            _logger.LogInformation("No pending reminders due for today's check.");
+            await context.SaveChangesAsync();
+            _logger.LogInformation("Dispatched {BillCount} bill reminders and {WarrantyCount} warranty alerts.", dueBills.Count, expiringWarranties.Count);
         }
     }
 }
