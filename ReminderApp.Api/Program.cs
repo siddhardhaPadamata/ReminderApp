@@ -42,14 +42,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    options.AddPolicy("AllowViteApp", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173")
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowAnyMethod();
     });
 });
+
+// Place this before app.UseAuthentication() and app.UseAuthorization():
 
 
 builder.Services.AddAuthorization();
@@ -62,9 +63,8 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-app.UseCors("AllowReactApp");
+app.UseCors("AllowViteApp");
 app.UseHttpsRedirection();
-app.UseCors("AllowFrontend");
 // Auth pipeline
 app.UseAuthentication();
 app.UseAuthorization();
