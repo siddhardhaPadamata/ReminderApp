@@ -54,16 +54,6 @@ public class TestNotificationController : ControllerBase
         return Ok(new { message = $"Email dispatch attempted for {request.ToEmail}" });
     }
 
-    [HttpPost("test-sms")]
-    public async Task<IActionResult> TestSms([FromBody] TestSmsRequest request)
-    {
-        _logger.LogInformation("Sending test SMS to {PhoneNumber}", request.ToPhoneNumber);
-
-        var message = "Smart Reminder: This is a test SMS alert verifying your Twilio integration.";
-
-        await _notificationService.SendSmsAsync(request.ToPhoneNumber, message);
-        return Ok(new { message = $"SMS dispatch attempted for {request.ToPhoneNumber}" });
-    }
 }
 
 public record TestEmailRequest(string ToEmail);
