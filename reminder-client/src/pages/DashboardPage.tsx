@@ -234,7 +234,7 @@ className = "text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
                 <div>
                 <div className="flex items-center gap-2 mb-1" >
             <span
-                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${item.type === 'Bill'
+                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${item.type === 'bill'
                     ? 'bg-amber-100 text-amber-800'
                     : 'bg-indigo-100 text-indigo-800'
                 }`}
@@ -326,11 +326,11 @@ className = "text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-poin
 
             < div className = "flex items-center gap-3" >
             {
-                bill.billReceiptUrl && (
+                bill.receiptUrl && (
                     <button
                             onClick={() =>
                 onViewImage(
-                    bill.billReceiptUrl!,
+                    bill.receiptUrl!,
                     `Receipt - ${bill.title}`
                 )
                             }

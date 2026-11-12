@@ -2,11 +2,11 @@ export interface Bill {
     id: string;
     title: string;
     amount: number;
-    category: string;
     dueDate: string;
-    status?: string;
+    category: string | number;
+    status: string;
+    billReceiptUrl?: string; // Add this if backend returns billReceiptUrl
     receiptUrl?: string;
-    reminderSent?: boolean;
 }
 
 export interface Warranty {
@@ -20,11 +20,21 @@ export interface Warranty {
     itemPhotoUrl?: string;
     reminderSent?: boolean;
 }
-
 export interface SearchItem {
     id: string;
-    title: string;
-    type: string;
-    category: string;
-    date: string;
+    title?: string;
+    itemName?: string;
+    targetDate?: string; // add this
+    status?: string;     // add this
+    category?: string | number;
+    type?: 'bill' | 'warranty';
+    [key: string]: any;  // optional fallback to prevent strict indexing errors
 }
+
+// export interface SearchItem {
+//     id: string;
+//     title: string;
+//     type: string;
+//     category: string;
+//     date: string;
+//}

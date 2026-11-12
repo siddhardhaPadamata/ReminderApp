@@ -5,9 +5,11 @@ namespace ReminderApp.Api.DTOs
         string? Email,
         string? PhoneNumber,
         [Required] string Password);
+
     public record LoginRequest(
         string Identifier,
         [Required] string Password);
+
     public record AuthResponse(
         Guid UserId,
         string? Email,

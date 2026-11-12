@@ -1,64 +1,67 @@
 services:
-  # 1. PostgreSQL Database
-  postgres:
+  postgres-db:
     image: postgres:16-alpine
-    container_name: reminder-postgres
-    restart: always
+    container_name: reminderapp-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
       POSTGRES_DB: reminderdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password!
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - reminder-network
 
-  # 2. Redis Cache
   redis:
     image: redis:7-alpine
     container_name: reminder-redis
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
+    networks:
+      - reminder-network
 
-  # 3. .NET 10 API
   api:
     build:
-      context: ./ReminderApp.Api
-      dockerfile: Dockerfile
-    container_name: reminder-api
-    restart: always
+      context: .
+      dockerfile: ReminderApp.Api/Dockerfile
+    container_name: reminderapp-api
+    restart: unless-stopped
     depends_on:
-      - postgres
+      - postgres-db
       - redis
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=reminderdb;Username=postgres;Password=password
-      - ConnectionStrings__Redis=redis:6379
-      - Jwt__Key=ThisIsASecretKeyForJwtTokenGenerationMinimum32BytesLong!
-      - Jwt__Issuer=ReminderAppApi
-      - Jwt__Audience=ReminderAppClient
     ports:
-      - "5000:8080"
+      - "5154:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=reminderdb;Username=postgres;Password=password!
+      - ConnectionStrings__Redis=reminder-redis:6379
     volumes:
       - api_uploads:/app/wwwroot/uploads
+    networks:
+      - reminder-network
 
-  # 4. React Client (Vite + Nginx)
-  client:
+  frontend:
     build:
       context: ./reminder-client
       dockerfile: Dockerfile
-    container_name: reminder-client
-    restart: always
+      args:
+        - VITE_API_BASE_URL=http://localhost:5154/api
+    container_name: reminderapp-frontend
+    restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "3000:80"
+      - "5173:80"
+    networks:
+      - reminder-network
 
 volumes:
   postgres_data:
-  redis_data:
   api_uploads:
+
+networks:
+  reminder-network:
+    driver: bridge

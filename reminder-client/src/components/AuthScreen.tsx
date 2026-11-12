@@ -22,11 +22,11 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
         try {
             if (isRegister) {
                 const response = await authApi.register({ email, phoneNumber, password });
-                localStorage.setItem('accessToken', response.accessToken);
+                localStorage.setItem('token', response.accessToken);
                 onAuthSuccess(response.accessToken);
             } else {
                 const response = await authApi.login({ identifier, password });
-                localStorage.setItem('accessToken', response.accessToken);
+                localStorage.setItem('token', response.accessToken);
                 onAuthSuccess(response.accessToken);
             }
         } catch (err: any) {

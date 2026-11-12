@@ -4,7 +4,7 @@ using ReminderApp.Api.Data;
 using ReminderApp.Api.DTOs;
 using ReminderApp.Api.Models;
 using ReminderApp.Api.Services;
-
+using Microsoft.AspNetCore.Authorization;
 namespace ReminderApp.Api.Controllers;
 
 [ApiController]
@@ -19,7 +19,7 @@ public class AuthController : ControllerBase
         _context = context;
         _tokenService = tokenService;
     }
-
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -51,7 +51,7 @@ public class AuthController : ControllerBase
 
         return Ok(new AuthResponse(user.Id, user.Email, user.PhoneNumber, accessToken, refreshToken));
     }
-
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
